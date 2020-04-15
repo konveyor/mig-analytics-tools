@@ -1,2 +1,2 @@
 # mig-analytics-tools
-Migration Analytics tools
+This repo contains various tools to assist with deployment and enablement of Migration Analytics.
