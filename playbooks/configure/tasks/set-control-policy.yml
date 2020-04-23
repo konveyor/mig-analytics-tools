@@ -43,6 +43,12 @@
 
 - debug:
     var: vmware_provider_ids
+    
+- name: CFME | Add Control Profile | Check for at least 1 VMware provider ID
+  assert:
+    that:
+      - {{ vmware_provider_ids|length }} >= 1
+    msg: "This playbook should be run after a VMware provider has been added to CloudForms"
 
 - name: CFME | Add Control Profile | Assign the profile to the VMware provider IDs
   uri:
