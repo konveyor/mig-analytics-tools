@@ -1,15 +1,47 @@
 ---
-- name: Setup SmartState Analysis
+- name: Setup SmartState Analysis for Migration Analytics use
   hosts: localhost
   vars_files:
   - vars/miq_vars.yml
 
   tasks:
-  - import_tasks: tasks/configure-server-settings.yml
+  - set_fact:
+      vmware_provider_ids: []
+      provider_type: 'ManageIQ::Providers::Vmware::InfraManager'
 
-  - import_tasks: tasks/set-control-policy.yml
+  - name: CFME | Check prerequisites | Generate an API token
+    shell: |
+      set -o pipefail                    \
+      source {{ miq_profile }} &&        \
+      {{ miq_home_dir }}/bin/rails r "   \
+        puts Api::UserTokenService.new.generate_token('admin', 'api')"
+    register: shell_output
 
-  - import_tasks: tasks/copy-sample-profile-to-default.yml
+  - set_fact:
+      api_token: "{{ shell_output.stdout }}"
+
+  - name: CFME | Check prerequisites | Get the VMware provider IDs
+    uri:
+      url: https://localhost/api/providers?filter[]=type={{ provider_type }}&expand=resources&attributes=name,id
+      method: GET
+      headers:
+        X-Auth-Token: "{{ api_token }}"
+      validate_certs: no
+      body_format: json
+    register: rest_return
+
+  - set_fact:
+      vmware_provider_ids: "{{ vmware_provider_ids + [ item ] }}"
+    with_items: "{{ rest_return|json_query('json.resources[*].id') }}"
+
+  - debug:
+      var: vmware_provider_ids
+
+  - name: CFME | Check prerequisites | Check for at least 1 VMware provider ID
+    assert:
+      that:
+        - "vmware_provider_ids|length > 0"
+      msg: "This playbook should be run after a VMware provider has been added to CloudForms"
 
   - name: CFME | SmartState Analysis | Check that the VDDK file {{ vddk_path }} exists
     stat:
@@ -19,3 +51,9 @@
   - name: CFME | SmartState Analysis | Install VDDK
     include_tasks: tasks/install-vddk.yml
     when: stat_result.stat.exists
+
+  - import_tasks: tasks/configure-server-settings.yml
+
+  - import_tasks: tasks/set-control-policy.yml
+
+  - import_tasks: tasks/copy-sample-profile-to-default.yml
